@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     timezone: str = "America/Santiago"
     alert_webhook_url: str = ""
     secret_key: str = ""  # Set this in production; empty → ephemeral key (tokens lost on restart)
+    snapshot_retention_days: int = 90
 
     class Config:
         env_file = ".env"

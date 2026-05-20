@@ -14,6 +14,7 @@ interface Props {
   detail: DiskDetail | null;
   sparkData: TemperaturePoint[];
   onClick: () => void;
+  onDelete?: () => void;
 }
 
 function healthStyle(health: string | null): { bg: string; fg: string } {
@@ -22,7 +23,7 @@ function healthStyle(health: string | null): { bg: string; fg: string } {
   return { bg: "#1e293b", fg: "#94a3b8" };
 }
 
-export default function DiskCard({ disk, detail, sparkData, onClick }: Props) {
+export default function DiskCard({ disk, detail, sparkData, onClick, onDelete }: Props) {
   const health = disk.overall_health;
   const hs = healthStyle(health);
 
@@ -82,21 +83,44 @@ export default function DiskCard({ disk, detail, sparkData, onClick }: Props) {
             {disk.model ?? "Unknown model"}
           </div>
         </div>
-        <span
-          style={{
-            background: hs.bg,
-            color: hs.fg,
-            borderRadius: 6,
-            padding: "2px 9px",
-            fontSize: "0.72rem",
-            fontWeight: 700,
-            letterSpacing: "0.05em",
-            whiteSpace: "nowrap",
-            flexShrink: 0,
-          }}
-        >
-          {health ?? "UNKNOWN"}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexShrink: 0 }}>
+          <span
+            style={{
+              background: hs.bg,
+              color: hs.fg,
+              borderRadius: 6,
+              padding: "2px 9px",
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {health ?? "UNKNOWN"}
+          </span>
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Remove "${disk.name}" from DiskWatch? This deletes all stored history.`)) {
+                  onDelete();
+                }
+              }}
+              title="Remove disk"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#475569",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                padding: "2px 4px",
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats grid */}

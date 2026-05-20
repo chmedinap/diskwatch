@@ -3,13 +3,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.alerts import seed_default_rules
 from app.auth import require_auth
 from app.database import Base, engine, SessionLocal
 from app.routers import disks, scan
 from app.routers.alerts import router as alerts_router
-from app.routers.auth import router as auth_router
+from app.routers.auth import router as auth_router, limiter as auth_limiter
 from app.routers.health import router as health_router
 from app.routers.schedules import router as schedules_router
 from app.scheduler import start_scheduler
@@ -36,9 +38,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="DiskWatch API",
     description="SMART disk health monitoring",
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = auth_limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

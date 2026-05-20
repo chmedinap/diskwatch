@@ -125,6 +125,19 @@ export interface TestSchedule {
   created_at: string;
 }
 
+export interface SelfTestLogEntry {
+  test_type: string;
+  status: string;
+  passed: boolean | null;
+  lifetime_hours: number | null;
+  lba_of_first_error: number | null;
+}
+
+export interface SelfTestLog {
+  disk_id: number;
+  entries: SelfTestLogEntry[];
+}
+
 // ── Token storage ─────────────────────────────────────────────────────────────
 
 const TOKEN_KEY = "diskwatch_token";
@@ -198,23 +211,12 @@ export const fetchTemperatureHistory = (id: number, days = 30) =>
   get<TemperaturePoint[]>(`/disks/${id}/temperature/history?days=${days}`);
 export const fetchAttributeHistory = (id: number, attr: number, days = 30) =>
   get<AttributeHistory>(`/disks/${id}/history?attr=${attr}&days=${days}`);
+export const deleteDisk = (id: number) => del(`/disks/${id}`);
+export const fetchSelfTestLog = (id: number) => get<SelfTestLog>(`/disks/${id}/test/log`);
 
-export async function triggerScan(): Promise<{ scanned: string[] }> {
-  const res = await fetch(`${BASE}/scan/`, { method: "POST" });
-  if (!res.ok) throw new Error(`Scan failed: ${res.status}`);
-  return res.json();
-}
-
-export async function triggerTest(
-  diskId: number,
-  testType: "short" | "long",
-): Promise<{ device: string; test_type: string; message: string }> {
-  const res = await fetch(`${BASE}/disks/${diskId}/test/${testType}`, {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error(`Test failed: ${res.status}`);
-  return res.json();
-}
+export const triggerScan = () => post<{ scanned: string[] }>("/scan/");
+export const triggerTest = (diskId: number, testType: "short" | "long") =>
+  post<{ device: string; test_type: string; message: string }>(`/disks/${diskId}/test/${testType}`);
 
 // ── Alert calls ───────────────────────────────────────────────────────────────
 
@@ -356,6 +358,9 @@ export const authLogin = (username: string, password: string) =>
   });
 
 export const fetchMe = () => get<AuthMe>("/auth/me");
+
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  post<void>("/auth/password", { current_password: currentPassword, new_password: newPassword });
 
 // ── Schedule calls ────────────────────────────────────────────────────────────
 

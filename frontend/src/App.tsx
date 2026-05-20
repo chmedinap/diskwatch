@@ -7,6 +7,8 @@ import type {
 } from "./api";
 import {
   clearToken,
+  changePassword,
+  deleteDisk,
   fetchAuthStatus,
   fetchHealth,
   fetchDisks,
@@ -42,6 +44,7 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tempHistory30d, setTempHistory30d] = useState<TemperaturePoint[]>([]);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   useEffect(() => {
     onUnauthorized.handler = () => {
@@ -117,6 +120,13 @@ export default function App() {
     if (authState === "authenticated") void loadDashboard();
   }, [authState, loadDashboard]);
 
+  // Auto-refresh dashboard data every 5 minutes
+  useEffect(() => {
+    if (authState !== "authenticated") return;
+    const id = setInterval(() => void loadDashboard(), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [authState, loadDashboard]);
+
   // ── Auth gates (after all hooks) ─────────────────────────────────────────────
   if (authState === "loading") {
     return (
@@ -159,6 +169,14 @@ export default function App() {
     setTempHistory30d([]);
   };
 
+  const handleDeleteDisk = async (id: number) => {
+    await deleteDisk(id);
+    setDisks((prev) => prev.filter((d) => d.id !== id));
+    setDiskDetails((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    setTempHistories7d((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    if (selectedId === id) closeDetail();
+  };
+
   const selectedDisk = selectedId != null ? diskDetails.get(selectedId) ?? null : null;
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -175,7 +193,12 @@ export default function App() {
         }}
         username={authUser}
         onLogout={handleLogout}
+        onChangePassword={() => setShowPasswordModal(true)}
       />
+
+      {showPasswordModal && (
+        <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
+      )}
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "1.5rem 1rem 3rem" }}>
         {error && (
@@ -217,6 +240,7 @@ export default function App() {
                   detail={diskDetails.get(disk.id) ?? null}
                   sparkData={tempHistories7d.get(disk.id) ?? []}
                   onClick={() => void openDetail(disk.id)}
+                  onDelete={() => void handleDeleteDisk(disk.id)}
                 />
               ))}
             </div>
@@ -251,6 +275,7 @@ function Header({
   onNav,
   username,
   onLogout,
+  onChangePassword,
 }: {
   health: HealthSummary | null;
   scanning: boolean;
@@ -259,6 +284,7 @@ function Header({
   onNav: (v: "dashboard" | "alerts") => void;
   username: string | null;
   onLogout: () => void;
+  onChangePassword: () => void;
 }) {
   const unread = health?.unacknowledged_alerts ?? 0;
 
@@ -333,6 +359,21 @@ function Header({
           {username && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <span style={{ color: "#64748b", fontSize: "0.78rem" }}>{username}</span>
+              <button
+                onClick={onChangePassword}
+                title="Change password"
+                style={{
+                  background: "transparent",
+                  border: "1px solid #334155",
+                  color: "#64748b",
+                  borderRadius: 6,
+                  padding: "0.25rem 0.6rem",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
+                Password
+              </button>
               <button
                 onClick={onLogout}
                 title="Sign out"
@@ -489,6 +530,98 @@ function DiskIcon() {
     </svg>
   );
 }
+
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const submit = async () => {
+    if (!current || !next) { setError("All fields are required"); return; }
+    if (next.length < 6) { setError("New password must be at least 6 characters"); return; }
+    if (next !== confirm) { setError("Passwords do not match"); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      await changePassword(current, next);
+      setDone(true);
+    } catch (e) {
+      setError(String(e).replace("Error: ", ""));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
+    }} onClick={onClose}>
+      <div style={{
+        background: "#1e293b", border: "1px solid #334155", borderRadius: 14,
+        padding: "1.75rem", width: "100%", maxWidth: 360,
+      }} onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ fontWeight: 700, fontSize: "1rem", marginBottom: "1.25rem" }}>
+          Change Password
+        </h2>
+
+        {done ? (
+          <>
+            <p style={{ color: "#4ade80", fontSize: "0.85rem", marginBottom: "1rem" }}>
+              Password changed successfully.
+            </p>
+            <button onClick={onClose} style={pwBtnStyle(false)}>Close</button>
+          </>
+        ) : (
+          <>
+            {(["Current password", "New password", "Confirm new password"] as const).map((label, i) => {
+              const val = [current, next, confirm][i];
+              const set = [setCurrent, setNext, setConfirm][i];
+              return (
+                <div key={label} style={{ marginBottom: "0.75rem" }}>
+                  <label style={{ display: "block", color: "#64748b", fontSize: "0.72rem", marginBottom: 4 }}>
+                    {label}
+                  </label>
+                  <input
+                    type="password"
+                    value={val}
+                    onChange={(e) => set(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void submit()}
+                    style={{
+                      width: "100%", background: "#0f172a", border: "1px solid #334155",
+                      borderRadius: 7, color: "#e2e8f0", padding: "0.5rem 0.75rem",
+                      fontSize: "0.85rem", fontFamily: "inherit", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              );
+            })}
+            {error && <p style={{ color: "#f87171", fontSize: "0.8rem", margin: "0.25rem 0 0.5rem" }}>{error}</p>}
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <button onClick={onClose} style={{ ...pwBtnStyle(false), background: "#334155", color: "#94a3b8" }}>
+                Cancel
+              </button>
+              <button onClick={() => void submit()} disabled={loading} style={pwBtnStyle(loading)}>
+                {loading ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const pwBtnStyle = (disabled: boolean): React.CSSProperties => ({
+  flex: 1, background: disabled ? "#334155" : "#1d4ed8",
+  color: disabled ? "#64748b" : "#eff6ff",
+  border: "none", borderRadius: 8, padding: "0.55rem 1rem",
+  fontWeight: 700, fontSize: "0.85rem",
+  cursor: disabled ? "not-allowed" : "pointer",
+});
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();

@@ -1,13 +1,16 @@
-from datetime import datetime, timedelta
+import json
+from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func
+from sqlalchemy.orm import Session, aliased
 
 from app import models, schemas
 from app.alerts import compute_score
 from app.config import settings
 from app.database import get_db
 from app.smart import SmartCollector
+from app.utils import utcnow
 
 router = APIRouter(prefix="/disks", tags=["disks"])
 
@@ -18,16 +21,25 @@ _TEMP_ATTR_IDS = (190, 194)
 
 @router.get("/", response_model=list[schemas.DiskListItem])
 def list_disks(db: Session = Depends(get_db)):
-    disks = db.query(models.Disk).order_by(models.Disk.name).all()
-    result: list[schemas.DiskListItem] = []
-    for disk in disks:
-        latest = (
-            db.query(models.SmartSnapshot)
-            .filter(models.SmartSnapshot.disk_id == disk.id)
-            .order_by(models.SmartSnapshot.timestamp.desc())
-            .first()
+    # Single query: get all disks + their latest snapshot via subquery
+    latest_sq = (
+        db.query(
+            models.SmartSnapshot.disk_id,
+            func.max(models.SmartSnapshot.id).label("max_id"),
         )
-        result.append(schemas.DiskListItem(
+        .group_by(models.SmartSnapshot.disk_id)
+        .subquery()
+    )
+    snap = aliased(models.SmartSnapshot)
+    rows = (
+        db.query(models.Disk, snap)
+        .outerjoin(latest_sq, latest_sq.c.disk_id == models.Disk.id)
+        .outerjoin(snap, snap.id == latest_sq.c.max_id)
+        .order_by(models.Disk.name)
+        .all()
+    )
+    return [
+        schemas.DiskListItem(
             id=disk.id,
             name=disk.name,
             model=disk.model,
@@ -37,8 +49,9 @@ def list_disks(db: Session = Depends(get_db)):
             overall_health=latest.overall_health if latest else None,
             last_seen=disk.last_seen,
             last_snapshot_at=latest.timestamp if latest else None,
-        ))
-    return result
+        )
+        for disk, latest in rows
+    ]
 
 
 @router.get("/{disk_id}", response_model=schemas.DiskDetail)
@@ -88,7 +101,7 @@ def get_attribute_history(
     if not db.query(models.Disk).filter(models.Disk.id == disk_id).first():
         raise HTTPException(status_code=404, detail="Disk not found")
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
 
     rows = (
         db.query(models.SmartSnapshot.timestamp, models.SmartAttribute)
@@ -130,7 +143,7 @@ def get_temperature_history(
     if not db.query(models.Disk).filter(models.Disk.id == disk_id).first():
         raise HTTPException(status_code=404, detail="Disk not found")
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
 
     rows = (
         db.query(models.SmartSnapshot.timestamp, models.SmartAttribute.raw_value)
@@ -205,3 +218,86 @@ def get_health_score(disk_id: int, db: Session = Depends(get_db)):
     }
     score, deductions = compute_score(attrs, latest.overall_health)
     return schemas.HealthScore(disk_id=disk_id, score=score, deductions=deductions)
+
+
+@router.delete("/{disk_id}", status_code=204)
+def delete_disk(disk_id: int, db: Session = Depends(get_db)):
+    disk = db.query(models.Disk).filter(models.Disk.id == disk_id).first()
+    if not disk:
+        raise HTTPException(status_code=404, detail="Disk not found")
+
+    snap_ids = [
+        row[0]
+        for row in db.query(models.SmartSnapshot.id)
+        .filter(models.SmartSnapshot.disk_id == disk_id)
+        .all()
+    ]
+    if snap_ids:
+        db.query(models.SmartAttribute).filter(
+            models.SmartAttribute.snapshot_id.in_(snap_ids)
+        ).delete(synchronize_session=False)
+    db.query(models.SmartSnapshot).filter(
+        models.SmartSnapshot.disk_id == disk_id
+    ).delete(synchronize_session=False)
+    db.query(models.TestSchedule).filter(
+        models.TestSchedule.disk_id == disk_id
+    ).delete(synchronize_session=False)
+    db.query(models.AlertEvent).filter(
+        models.AlertEvent.disk_id == disk_id
+    ).delete(synchronize_session=False)
+    db.query(models.AlertRule).filter(
+        models.AlertRule.disk_id == disk_id
+    ).delete(synchronize_session=False)
+    db.delete(disk)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.get("/{disk_id}/test/log", response_model=schemas.SelfTestLog)
+def get_self_test_log(disk_id: int, db: Session = Depends(get_db)):
+    if not db.query(models.Disk).filter(models.Disk.id == disk_id).first():
+        raise HTTPException(status_code=404, detail="Disk not found")
+
+    latest = (
+        db.query(models.SmartSnapshot)
+        .filter(models.SmartSnapshot.disk_id == disk_id)
+        .order_by(models.SmartSnapshot.timestamp.desc())
+        .first()
+    )
+    if not latest or not latest.raw_json:
+        return schemas.SelfTestLog(disk_id=disk_id, entries=[])
+
+    try:
+        data = json.loads(latest.raw_json)
+    except Exception:
+        return schemas.SelfTestLog(disk_id=disk_id, entries=[])
+
+    entries: list[schemas.SelfTestLogEntry] = []
+
+    # ATA self-test log
+    for entry in (
+        data.get("ata_smart_self_test_log", {})
+        .get("standard", {})
+        .get("table", [])
+    ):
+        status_node = entry.get("status", {})
+        entries.append(schemas.SelfTestLogEntry(
+            test_type=entry.get("type", {}).get("string", "Unknown"),
+            status=status_node.get("string", "Unknown"),
+            passed=status_node.get("passed"),
+            lifetime_hours=entry.get("lifetime_hours"),
+            lba_of_first_error=entry.get("lba_of_first_error"),
+        ))
+
+    # NVMe self-test log
+    for entry in data.get("nvme_self_test_log", {}).get("table", []):
+        status_node = entry.get("self_test_status", {})
+        entries.append(schemas.SelfTestLogEntry(
+            test_type=entry.get("self_test_code", {}).get("string", "Unknown"),
+            status=status_node.get("string", "Unknown"),
+            passed=status_node.get("value") == 0,
+            lifetime_hours=entry.get("power_on_hours"),
+            lba_of_first_error=entry.get("failing_lba"),
+        ))
+
+    return schemas.SelfTestLog(disk_id=disk_id, entries=entries)

@@ -137,6 +137,28 @@ class TestScheduleUpsert(BaseModel):
     enabled: bool = True
 
 
+# ── Auth: password change ─────────────────────────────────────────────────────
+
+class AuthPasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+# ── Self-test log ─────────────────────────────────────────────────────────────
+
+class SelfTestLogEntry(BaseModel):
+    test_type: str
+    status: str
+    passed: bool | None
+    lifetime_hours: int | None
+    lba_of_first_error: int | None
+
+
+class SelfTestLog(BaseModel):
+    disk_id: int
+    entries: list[SelfTestLogEntry]
+
+
 # ── Alert rules ───────────────────────────────────────────────────────────────
 
 class AlertRuleCreate(BaseModel):

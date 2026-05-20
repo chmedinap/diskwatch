@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.auth import create_token, hash_password, require_auth, verify_password
 from app.database import SessionLocal, get_db
-from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["auth"])
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/auth/status", response_model=schemas.AuthStatus)
@@ -32,7 +36,8 @@ def auth_setup(body: schemas.AuthSetup, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/login", response_model=schemas.AuthToken)
-def auth_login(body: schemas.AuthLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def auth_login(request: Request, body: schemas.AuthLogin, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == body.username).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -42,3 +47,18 @@ def auth_login(body: schemas.AuthLogin, db: Session = Depends(get_db)):
 @router.get("/auth/me", response_model=schemas.AuthMe)
 def auth_me(username: str = Depends(require_auth)):
     return schemas.AuthMe(username=username)
+
+
+@router.post("/auth/password", status_code=204)
+def change_password(
+    body: schemas.AuthPasswordChange,
+    username: str = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if not user or not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()

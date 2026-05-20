@@ -4,6 +4,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, Str
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils import utcnow
 
 
 class Disk(Base):
@@ -16,8 +17,8 @@ class Disk(Base):
     firmware: Mapped[str | None] = mapped_column(String(64), nullable=True)
     interface: Mapped[str | None] = mapped_column(String(16), nullable=True)
     capacity_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
-    first_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class SmartSnapshot(Base):
@@ -25,7 +26,7 @@ class SmartSnapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     disk_id: Mapped[int] = mapped_column(Integer, ForeignKey("disks.id"), index=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     overall_health: Mapped[str | None] = mapped_column(String(16), nullable=True)
     raw_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -65,7 +66,7 @@ class AlertRule(Base):
     # log | webhook | both
     notification_type: Mapped[str] = mapped_column(String(16), default="log")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class User(Base):
@@ -74,7 +75,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class TestSchedule(Base):
@@ -86,7 +87,7 @@ class TestSchedule(Base):
     interval_hours: Mapped[int] = mapped_column(Integer)    # 1–24
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (UniqueConstraint("disk_id", "test_type"),)
 
@@ -102,5 +103,5 @@ class AlertEvent(Base):
     attr_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     triggered_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     message: Mapped[str] = mapped_column(String(512))
-    triggered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    triggered_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -10,7 +10,11 @@
       "PowerShell(docker tag diskwatch-frontend:latest martitoci/diskwatch-frontend:latest)",
       "PowerShell(docker push martitoci/diskwatch-backend:latest 2>&1)",
       "PowerShell(docker push martitoci/diskwatch-frontend:latest 2>&1)",
-      "PowerShell(docker push martitoci/diskwatch-frontend:latest)"
+      "PowerShell(docker push martitoci/diskwatch-frontend:latest)",
+      "PowerShell(docker compose build 2>&1)",
+      "PowerShell(tail -20)",
+      "PowerShell(docker compose build)",
+      "PowerShell(docker push martitoci/diskwatch-backend:latest)"
     ]
   }
 }

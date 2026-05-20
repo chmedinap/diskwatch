@@ -1,10 +1,11 @@
-import { useState } from "react";
-import type { DiskDetail as DiskDetailData, TemperaturePoint } from "../api";
+import { useEffect, useState } from "react";
+import type { DiskDetail as DiskDetailData, SelfTestLog, TemperaturePoint } from "../api";
 import {
   tempColor,
   formatCapacity,
   formatHours,
   attrRaw,
+  fetchSelfTestLog,
   triggerTest,
   computeHealthScore,
 } from "../api";
@@ -26,6 +27,11 @@ export default function DiskDetail({ disk, tempHistory, onBack }: Props) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const [testState, setTestState] = useState<"idle" | "running" | "done">("idle");
   const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [testLog, setTestLog] = useState<SelfTestLog | null>(null);
+
+  useEffect(() => {
+    fetchSelfTestLog(disk.id).then(setTestLog).catch(() => {});
+  }, [disk.id]);
 
   const latest = tempHistory[tempHistory.length - 1]?.temperature ?? null;
   const tc = tempColor(latest);
@@ -149,6 +155,30 @@ export default function DiskDetail({ disk, tempHistory, onBack }: Props) {
                   </div>
                 )}
               </div>
+
+              {testLog && testLog.entries.length > 0 && (
+                <div style={{ width: "100%", borderTop: "1px solid #334155", paddingTop: "0.9rem" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.5rem" }}>
+                    Test History
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                    {testLog.entries.slice(0, 5).map((entry, i) => (
+                      <div key={i} style={{ fontSize: "0.7rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <span style={{
+                          width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                          background: entry.passed === true ? "#22c55e" : entry.passed === false ? "#ef4444" : "#64748b",
+                        }} />
+                        <span style={{ color: "#94a3b8", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {entry.test_type.replace(" offline", "").replace(" Online", "")}
+                        </span>
+                        {entry.lifetime_hours != null && (
+                          <span style={{ color: "#475569", flexShrink: 0 }}>{entry.lifetime_hours.toLocaleString()}h</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <SchedulePanel diskId={disk.id} />
             </div>

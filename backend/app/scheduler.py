@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -9,6 +9,7 @@ from app.database import SessionLocal
 from app import models
 from app.alerts import AlertEvaluator
 from app.smart import SmartCollector
+from app.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def run_scan() -> list[str]:
 
                 disk = db.query(models.Disk).filter(models.Disk.name == result.name).first()
                 if not disk:
-                    disk = models.Disk(name=result.name, first_seen=datetime.utcnow())
+                    disk = models.Disk(name=result.name, first_seen=utcnow())
                     db.add(disk)
 
                 disk.model = result.model
@@ -40,12 +41,12 @@ def run_scan() -> list[str]:
                 disk.firmware = result.firmware
                 disk.interface = result.interface
                 disk.capacity_gb = result.capacity_gb
-                disk.last_seen = datetime.utcnow()
+                disk.last_seen = utcnow()
                 db.flush()
 
                 snapshot = models.SmartSnapshot(
                     disk_id=disk.id,
-                    timestamp=datetime.utcnow(),
+                    timestamp=utcnow(),
                     overall_health=result.overall_health,
                     raw_json=result.raw_json,
                 )
@@ -97,7 +98,7 @@ def run_scheduled_tests() -> None:
     """Run any SMART self-tests that are due based on user-configured schedules."""
     db = SessionLocal()
     collector = SmartCollector(smartctl_path=settings.smartctl_path)
-    now = datetime.utcnow()
+    now = utcnow()
 
     try:
         schedules = (
@@ -134,6 +135,33 @@ def run_scheduled_tests() -> None:
         db.close()
 
 
+def purge_old_snapshots() -> None:
+    """Delete snapshots (and their attributes) older than snapshot_retention_days."""
+    db = SessionLocal()
+    cutoff = utcnow() - timedelta(days=settings.snapshot_retention_days)
+    try:
+        snap_ids = [
+            row[0]
+            for row in db.query(models.SmartSnapshot.id)
+            .filter(models.SmartSnapshot.timestamp < cutoff)
+            .all()
+        ]
+        if snap_ids:
+            db.query(models.SmartAttribute).filter(
+                models.SmartAttribute.snapshot_id.in_(snap_ids)
+            ).delete(synchronize_session=False)
+            db.query(models.SmartSnapshot).filter(
+                models.SmartSnapshot.id.in_(snap_ids)
+            ).delete(synchronize_session=False)
+            db.commit()
+            logger.info("Purged %d snapshots older than %d days", len(snap_ids), settings.snapshot_retention_days)
+    except Exception:
+        logger.exception("purge_old_snapshots aborted")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def start_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=settings.timezone)
     scheduler.add_job(
@@ -149,6 +177,13 @@ def start_scheduler() -> BackgroundScheduler:
         id="scheduled_tests",
         replace_existing=True,
         next_run_time=datetime.now() + timedelta(seconds=30),
+    )
+    scheduler.add_job(
+        purge_old_snapshots,
+        trigger=IntervalTrigger(hours=24),
+        id="purge_snapshots",
+        replace_existing=True,
+        next_run_time=datetime.now() + timedelta(minutes=5),
     )
     scheduler.start()
     logger.info("Scheduler started; poll interval = %d min", settings.poll_interval_minutes)

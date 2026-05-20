@@ -3,13 +3,14 @@
 import json
 import logging
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models
 from app.config import settings
+from app.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ class AlertEvaluator:
             return
 
         # Cooldown: skip if we already fired this rule for this disk recently.
-        cutoff = datetime.utcnow() - timedelta(hours=_COOLDOWN_HOURS)
+        cutoff = utcnow() - timedelta(hours=_COOLDOWN_HOURS)
         if (
             self.db.query(models.AlertEvent)
             .filter(
@@ -175,7 +176,7 @@ class AlertEvaluator:
             attr_name=attr_obj.attr_name if attr_obj else None,
             triggered_value=triggered_value,
             message=message,
-            triggered_at=datetime.utcnow(),
+            triggered_at=utcnow(),
         )
         self.db.add(event)
         self.db.flush()
@@ -226,7 +227,7 @@ def _fire_webhook(
             "disk": disk_name,
             "attr_id": attr_id,
             "value": value,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
     ).encode()
     try:
