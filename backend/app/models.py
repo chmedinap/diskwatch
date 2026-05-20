@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -66,6 +66,29 @@ class AlertRule(Base):
     notification_type: Mapped[str] = mapped_column(String(16), default="log")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TestSchedule(Base):
+    __tablename__ = "test_schedules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    disk_id: Mapped[int] = mapped_column(Integer, ForeignKey("disks.id"), index=True)
+    test_type: Mapped[str] = mapped_column(String(8))       # "short" | "long"
+    interval_hours: Mapped[int] = mapped_column(Integer)    # 1–24
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("disk_id", "test_type"),)
 
 
 class AlertEvent(Base):

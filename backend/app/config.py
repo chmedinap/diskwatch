@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     poll_interval_minutes: int = 30
     timezone: str = "America/Santiago"
     alert_webhook_url: str = ""
+    secret_key: str = ""  # Set this in production; empty → ephemeral key (tokens lost on restart)
 
     class Config:
         env_file = ".env"

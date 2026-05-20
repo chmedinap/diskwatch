@@ -109,10 +109,42 @@ export interface AlertEvent {
   acknowledged: boolean;
 }
 
+// ── Auth types ─────────────────────────────────────────────────────────────────
+
+export interface AuthStatus { setup_required: boolean; }
+export interface AuthToken { access_token: string; username: string; }
+export interface AuthMe { username: string; }
+
+export interface TestSchedule {
+  id: number;
+  disk_id: number;
+  test_type: string;
+  interval_hours: number;
+  enabled: boolean;
+  last_run_at: string | null;
+  created_at: string;
+}
+
+// ── Token storage ─────────────────────────────────────────────────────────────
+
+const TOKEN_KEY = "diskwatch_token";
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+// Fired when any authenticated request returns 401 so App.tsx can react.
+export const onUnauthorized: { handler: (() => void) | null } = { handler: null };
+
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = getToken();
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`);
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() });
+  if (res.status === 401) { onUnauthorized.handler?.(); throw new Error("401"); }
   if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -120,9 +152,10 @@ async function get<T>(path: string): Promise<T> {
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    headers: authHeaders(body !== undefined ? { "Content-Type": "application/json" } : {}),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401) { onUnauthorized.handler?.(); throw new Error("401"); }
   if (!res.ok) throw new Error(`POST ${path} → ${res.status}`);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -131,15 +164,28 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 async function patch<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
+  if (res.status === 401) { onUnauthorized.handler?.(); throw new Error("401"); }
   if (!res.ok) throw new Error(`PATCH ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
 
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) { onUnauthorized.handler?.(); throw new Error("401"); }
+  if (!res.ok) throw new Error(`PUT ${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 async function del(path: string): Promise<void> {
-  const res = await fetch(`${BASE}${path}`, { method: "DELETE" });
+  const res = await fetch(`${BASE}${path}`, { method: "DELETE", headers: authHeaders() });
+  if (res.status === 401) { onUnauthorized.handler?.(); throw new Error("401"); }
   if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
 }
 
@@ -283,6 +329,48 @@ export function computeHealthScore(
 
   return { score: Math.max(0, score), deductions };
 }
+
+// ── Auth calls (no token needed) ──────────────────────────────────────────────
+
+export const fetchAuthStatus = () =>
+  fetch(`${BASE}/auth/status`).then((r) => r.json() as Promise<AuthStatus>);
+
+export const authSetup = (username: string, password: string) =>
+  fetch(`${BASE}/auth/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error((await r.json()).detail ?? "Setup failed");
+    return r.json() as Promise<AuthToken>;
+  });
+
+export const authLogin = (username: string, password: string) =>
+  fetch(`${BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error((await r.json()).detail ?? "Invalid credentials");
+    return r.json() as Promise<AuthToken>;
+  });
+
+export const fetchMe = () => get<AuthMe>("/auth/me");
+
+// ── Schedule calls ────────────────────────────────────────────────────────────
+
+export const fetchSchedules = (diskId: number) =>
+  get<TestSchedule[]>(`/disks/${diskId}/schedules`);
+
+export const upsertSchedule = (
+  diskId: number,
+  testType: "short" | "long",
+  intervalHours: number,
+  enabled: boolean,
+) => put<TestSchedule>(`/disks/${diskId}/schedules/${testType}`, { interval_hours: intervalHours, enabled });
+
+export const deleteSchedule = (diskId: number, testType: "short" | "long") =>
+  del(`/disks/${diskId}/schedules/${testType}`);
 
 /** Condition label for display in the UI. */
 export function conditionLabel(rule: AlertRule): string {

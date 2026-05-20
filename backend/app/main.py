@@ -1,14 +1,17 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.alerts import seed_default_rules
+from app.auth import require_auth
 from app.database import Base, engine, SessionLocal
 from app.routers import disks, scan
 from app.routers.alerts import router as alerts_router
+from app.routers.auth import router as auth_router
 from app.routers.health import router as health_router
+from app.routers.schedules import router as schedules_router
 from app.scheduler import start_scheduler
 
 logging.basicConfig(
@@ -33,7 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="DiskWatch API",
     description="SMART disk health monitoring",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -44,7 +47,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(disks.router, prefix="/api")
-app.include_router(scan.router, prefix="/api")
-app.include_router(health_router, prefix="/api")
-app.include_router(alerts_router, prefix="/api")
+_auth = [Depends(require_auth)]
+
+# Auth routes are public (no token required for status/setup/login).
+app.include_router(auth_router, prefix="/api")
+
+# All other routes require a valid JWT.
+app.include_router(disks.router, prefix="/api", dependencies=_auth)
+app.include_router(scan.router, prefix="/api", dependencies=_auth)
+app.include_router(health_router, prefix="/api", dependencies=_auth)
+app.include_router(alerts_router, prefix="/api", dependencies=_auth)
+app.include_router(schedules_router, prefix="/api", dependencies=_auth)

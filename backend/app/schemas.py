@@ -93,6 +93,50 @@ class TestResult(BaseModel):
     message: str
 
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+class AuthStatus(BaseModel):
+    setup_required: bool
+
+
+class AuthSetup(BaseModel):
+    username: str
+    password: str
+
+
+class AuthLogin(BaseModel):
+    username: str
+    password: str
+
+
+class AuthToken(BaseModel):
+    access_token: str
+    username: str
+
+
+class AuthMe(BaseModel):
+    username: str
+
+
+# ── Test schedules ─────────────────────────────────────────────────────────────
+
+class TestScheduleRead(BaseModel):
+    id: int
+    disk_id: int
+    test_type: str
+    interval_hours: int
+    enabled: bool
+    last_run_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TestScheduleUpsert(BaseModel):
+    interval_hours: int   # 1–24
+    enabled: bool = True
+
+
 # ── Alert rules ───────────────────────────────────────────────────────────────
 
 class AlertRuleCreate(BaseModel):

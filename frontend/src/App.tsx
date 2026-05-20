@@ -6,20 +6,32 @@ import type {
   HealthSummary,
 } from "./api";
 import {
+  clearToken,
+  fetchAuthStatus,
   fetchHealth,
   fetchDisks,
   fetchDisk,
+  fetchMe,
   fetchTemperatureHistory,
+  getToken,
+  onUnauthorized,
+  setToken,
   triggerScan,
 } from "./api";
 import DiskCard from "./components/DiskCard";
 import DiskDetailView from "./components/DiskDetail";
 import AlertsPage from "./components/AlertsPage";
+import LoginPage from "./components/LoginPage";
+import SetupPage from "./components/SetupPage";
 
 type View = "dashboard" | "detail" | "alerts";
+type AuthState = "loading" | "setup" | "login" | "authenticated";
 
 export default function App() {
-  // ── Dashboard state ─────────────────────────────────────────────────────────
+  // ── All hooks first (React rules of hooks — no hooks after early returns) ────
+  const [authState, setAuthState] = useState<AuthState>("loading");
+  const [authUser, setAuthUser] = useState<string | null>(null);
+
   const [view, setView] = useState<View>("dashboard");
   const [health, setHealth] = useState<HealthSummary | null>(null);
   const [disks, setDisks] = useState<DiskListItem[]>([]);
@@ -28,10 +40,45 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
-
-  // ── Detail state ─────────────────────────────────────────────────────────────
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tempHistory30d, setTempHistory30d] = useState<TemperaturePoint[]>([]);
+
+  useEffect(() => {
+    onUnauthorized.handler = () => {
+      clearToken();
+      setAuthState("login");
+      setAuthUser(null);
+    };
+    void checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const status = await fetchAuthStatus();
+      if (status.setup_required) { setAuthState("setup"); return; }
+    } catch { setAuthState("login"); return; }
+
+    if (!getToken()) { setAuthState("login"); return; }
+    try {
+      const me = await fetchMe();
+      setAuthUser(me.username);
+      setAuthState("authenticated");
+    } catch {
+      clearToken();
+      setAuthState("login");
+    }
+  };
+
+  const handleAuthDone = (username: string) => {
+    setAuthUser(username);
+    setAuthState("authenticated");
+  };
+
+  const handleLogout = () => {
+    clearToken();
+    setAuthUser(null);
+    setAuthState("login");
+  };
 
   // ── Load dashboard ────────────────────────────────────────────────────────────
   const loadDashboard = useCallback(async () => {
@@ -67,8 +114,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void loadDashboard();
-  }, [loadDashboard]);
+    if (authState === "authenticated") void loadDashboard();
+  }, [authState, loadDashboard]);
+
+  // ── Auth gates (after all hooks) ─────────────────────────────────────────────
+  if (authState === "loading") {
+    return (
+      <div style={{ minHeight: "100vh", background: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "#475569" }}>Loading…</span>
+      </div>
+    );
+  }
+  if (authState === "setup") return <SetupPage onDone={handleAuthDone} />;
+  if (authState === "login") return <LoginPage onDone={handleAuthDone} />;
 
   // ── Scan ──────────────────────────────────────────────────────────────────────
   const scan = async () => {
@@ -115,6 +173,8 @@ export default function App() {
           if (v === "dashboard") closeDetail();
           else setView(v);
         }}
+        username={authUser}
+        onLogout={handleLogout}
       />
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "1.5rem 1rem 3rem" }}>
@@ -189,12 +249,16 @@ function Header({
   onScan,
   activeView,
   onNav,
+  username,
+  onLogout,
 }: {
   health: HealthSummary | null;
   scanning: boolean;
   onScan: () => void;
   activeView: "dashboard" | "alerts";
   onNav: (v: "dashboard" | "alerts") => void;
+  username: string | null;
+  onLogout: () => void;
 }) {
   const unread = health?.unacknowledged_alerts ?? 0;
 
@@ -242,8 +306,8 @@ function Header({
           <SystemStatus health={health} />
         </div>
 
-        {/* Right side: last scan + button */}
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        {/* Right side: last scan + scan btn + user */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           {health?.last_scan_at && (
             <span style={{ color: "#475569", fontSize: "0.78rem" }}>
               Last scan: {relativeTime(health.last_scan_at)}
@@ -266,6 +330,26 @@ function Header({
           >
             {scanning ? "Scanning…" : "Scan now"}
           </button>
+          {username && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span style={{ color: "#64748b", fontSize: "0.78rem" }}>{username}</span>
+              <button
+                onClick={onLogout}
+                title="Sign out"
+                style={{
+                  background: "transparent",
+                  border: "1px solid #334155",
+                  color: "#64748b",
+                  borderRadius: 6,
+                  padding: "0.25rem 0.6rem",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

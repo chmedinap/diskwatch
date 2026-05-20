@@ -12,6 +12,7 @@ import TempHistoryChart from "./SnapshotChart";
 import AttributesTable from "./AttributesTable";
 import HealthScore from "./HealthScore";
 import HistoryChart from "./HistoryChart";
+import SchedulePanel from "./SchedulePanel";
 
 type DetailTab = "overview" | "history";
 
@@ -148,6 +149,8 @@ export default function DiskDetail({ disk, tempHistory, onBack }: Props) {
                   </div>
                 )}
               </div>
+
+              <SchedulePanel diskId={disk.id} />
             </div>
 
             {/* Right: key stats + 30-day temp chart */}
