@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+.env
+
+# Node
+node_modules/
+frontend/dist/
+
+# DB / data
+*.db
+*.sqlite3
+data/
+
+# Local env overrides (copy from .env.example)
+.env
+
+# OS
+.DS_Store
+Thumbs.db

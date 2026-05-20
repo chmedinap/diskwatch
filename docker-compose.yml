@@ -1,0 +1,41 @@
+services:
+  backend:
+    image: martitoci/diskwatch-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diskwatch-backend
+    restart: unless-stopped
+    privileged: true
+    environment:
+      TZ: ${TZ:-UTC}
+      DATABASE_URL: sqlite:////data/diskwatch.db
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - /dev:/dev
+      - diskwatch_data:/data
+    networks:
+      - internal
+
+  frontend:
+    image: martitoci/diskwatch-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: diskwatch-frontend
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${DISKWATCH_PORT:-8080}:80"
+    depends_on:
+      - backend
+    networks:
+      - internal
+
+volumes:
+  diskwatch_data:
+
+networks:
+  internal:
+    driver: bridge

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Recurse -Exclude \".git\" | Where-Object { !$_.PSIsContainer } | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"C:\\\\Users\\\\chmedina\\\\Documents\\\\GitHub\\\\diskwatch\\\\\", \"\"\\) })",
+      "PowerShell(Select-String -Path \"backend\\\\app\\\\routers\\\\disks.py\",\"backend\\\\app\\\\routers\\\\scan.py\",\"backend\\\\app\\\\routers\\\\health.py\",\"backend\\\\app\\\\main.py\",\"backend\\\\app\\\\scheduler.py\" -Pattern \"^from |^import \" | ForEach-Object { \"$\\($_.Filename\\):$\\($_.LineNumber\\)  $\\($_.Line\\)\" })",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:8000/api/health\" -Method GET)",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:8080/api/health\" -Method GET)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8080\" -Method GET)",
+      "PowerShell(docker tag diskwatch-backend:latest martitoci/diskwatch-backend:latest)",
+      "PowerShell(docker tag diskwatch-frontend:latest martitoci/diskwatch-frontend:latest)",
+      "PowerShell(docker push martitoci/diskwatch-backend:latest 2>&1)",
+      "PowerShell(docker push martitoci/diskwatch-frontend:latest 2>&1)"
+    ]
+  }
+}
