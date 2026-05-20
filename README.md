@@ -33,6 +33,8 @@ services:
     container_name: diskwatch-backend
     restart: unless-stopped
     privileged: true
+    security_opt:
+      - apparmor=unconfined
     environment:
       TZ: ${TZ:-UTC}
       DATABASE_URL: sqlite:////data/diskwatch.db
@@ -97,6 +99,8 @@ services:
     container_name: diskwatch-backend
     restart: unless-stopped
     privileged: true
+    security_opt:
+      - apparmor=unconfined
     environment:
       TZ: UTC
       DATABASE_URL: sqlite:////data/diskwatch.db

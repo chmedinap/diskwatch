@@ -159,13 +159,26 @@ class SmartCollector:
         for attr in data.get("ata_smart_attributes", {}).get("table", []):
             flags_node = attr.get("flags", {})
             flags_str = flags_node.get("string") if isinstance(flags_node, dict) else str(flags_node)
+            raw_node = attr.get("raw", {})
+            raw_value = raw_node.get("value")
+            attr_id = attr["id"]
+            # Temperature attrs encode min/max history in the high bytes of the
+            # 48-bit raw value (e.g. "30 (Min/Max 21/36)" → 154620198942).
+            # Parse the first integer from raw.string to get actual °C.
+            if attr_id in (190, 194):
+                raw_str = raw_node.get("string", "")
+                try:
+                    raw_value = int(raw_str.split()[0])
+                except (ValueError, IndexError):
+                    if raw_value is not None:
+                        raw_value = raw_value & 0xFF
             rows.append(AttributeRow(
-                attr_id=attr["id"],
+                attr_id=attr_id,
                 attr_name=attr.get("name"),
                 value=attr.get("value"),
                 worst=attr.get("worst"),
                 threshold=attr.get("thresh"),
-                raw_value=attr.get("raw", {}).get("value"),
+                raw_value=raw_value,
                 flags=flags_str or None,
             ))
         return rows
