@@ -1,6 +1,7 @@
 import glob
 import json
 import logging
+import os
 import subprocess
 from dataclasses import dataclass, field
 
@@ -45,6 +46,45 @@ class CollectionResult:
     overall_health: str | None
     raw_json: str
     attributes: list[AttributeRow] = field(default_factory=list)
+
+
+def get_disk_usage(device: str) -> tuple[int, int] | None:
+    """Return (used_bytes, free_bytes) for all mounted partitions of *device*.
+
+    Reads /proc/mounts and calls os.statvfs on each mount point.
+    Returns None when no partitions are mounted (unformatted drive, etc.).
+    """
+    mount_points: list[str] = []
+    try:
+        with open("/proc/mounts") as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                mount_dev, mount_point = parts[0], parts[1]
+                # Match the device itself or any of its partitions
+                if mount_dev == device or (
+                    mount_dev.startswith(device) and len(mount_dev) > len(device)
+                ):
+                    mount_points.append(mount_point)
+    except Exception:
+        return None
+
+    if not mount_points:
+        return None
+
+    used_total = free_total = 0
+    counted = False
+    for mp in mount_points:
+        try:
+            st = os.statvfs(mp)
+            used_total += (st.f_blocks - st.f_bfree) * st.f_frsize
+            free_total += st.f_bavail * st.f_frsize
+            counted = True
+        except Exception:
+            continue
+
+    return (used_total, free_total) if counted else None
 
 
 class SmartCollector:

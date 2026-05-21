@@ -1,6 +1,7 @@
 import type { DiskListItem, DiskDetail, TemperaturePoint } from "../api";
 import {
   tempColor,
+  formatBytes,
   formatCapacity,
   formatHours,
   attrRaw,
@@ -15,6 +16,14 @@ interface Props {
   sparkData: TemperaturePoint[];
   onClick: () => void;
   onDelete?: () => void;
+}
+
+function freeColor(used: number | null, free: number | null): string {
+  if (used == null || free == null || used + free === 0) return "#e2e8f0";
+  const pct = used / (used + free);
+  if (pct >= 0.9) return "#ef4444";
+  if (pct >= 0.75) return "#f59e0b";
+  return "#4ade80";
 }
 
 function healthStyle(health: string | null): { bg: string; fg: string } {
@@ -141,7 +150,8 @@ export default function DiskCard({ disk, detail, sparkData, onClick, onDelete }:
           valueColor={tc}
         />
         <Stat label="Power-on" value={formatHours(poh)} />
-        <Stat label="Last scan" value={lastScan} colSpan={2} />
+        <UsageStat used={disk.used_bytes} free={disk.free_bytes} />
+        <Stat label="Last scan" value={lastScan} />
       </div>
 
       {/* Sparkline */}
@@ -183,6 +193,20 @@ function Stat({
     <div style={{ gridColumn: colSpan ? `span ${colSpan}` : undefined }}>
       <div style={{ color: "#475569", fontSize: "0.68rem" }}>{label}</div>
       <div style={{ fontWeight: 600, color: valueColor ?? "#e2e8f0" }}>{value}</div>
+    </div>
+  );
+}
+
+function UsageStat({ used, free }: { used: number | null; free: number | null }) {
+  const fc = freeColor(used, free);
+  return (
+    <div>
+      <div style={{ color: "#475569", fontSize: "0.68rem" }}>Used / Free</div>
+      <div style={{ fontWeight: 600, fontSize: "0.8rem", lineHeight: 1.3 }}>
+        <span style={{ color: "#e2e8f0" }}>{formatBytes(used)}</span>
+        <span style={{ color: "#334155" }}> / </span>
+        <span style={{ color: fc }}>{formatBytes(free)}</span>
+      </div>
     </div>
   );
 }

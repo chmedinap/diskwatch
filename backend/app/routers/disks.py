@@ -49,6 +49,8 @@ def list_disks(db: Session = Depends(get_db)):
             overall_health=latest.overall_health if latest else None,
             last_seen=disk.last_seen,
             last_snapshot_at=latest.timestamp if latest else None,
+            used_bytes=disk.used_bytes,
+            free_bytes=disk.free_bytes,
         )
         for disk, latest in rows
     ]
@@ -88,6 +90,8 @@ def get_disk(disk_id: int, db: Session = Depends(get_db)):
         last_seen=disk.last_seen,
         latest_snapshot=schemas.SnapshotRead.model_validate(latest) if latest else None,
         attributes=[schemas.SmartAttributeRead.model_validate(a) for a in attributes],
+        used_bytes=disk.used_bytes,
+        free_bytes=disk.free_bytes,
     )
 
 

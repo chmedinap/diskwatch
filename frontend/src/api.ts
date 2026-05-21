@@ -12,6 +12,8 @@ export interface DiskListItem {
   overall_health: string | null;
   last_seen: string;
   last_snapshot_at: string | null;
+  used_bytes: number | null;
+  free_bytes: number | null;
 }
 
 export interface SmartAttribute {
@@ -45,6 +47,8 @@ export interface DiskDetail {
   last_seen: string;
   latest_snapshot: SnapshotRead | null;
   attributes: SmartAttribute[];
+  used_bytes: number | null;
+  free_bytes: number | null;
 }
 
 export interface TemperaturePoint {
@@ -253,6 +257,14 @@ export function tempColor(t: number | null | undefined): string {
   if (t >= 55) return "#ef4444";
   if (t >= 45) return "#f59e0b";
   return "#22c55e";
+}
+
+export function formatBytes(bytes: number | null): string {
+  if (bytes == null) return "—";
+  const gb = bytes / 1e9;
+  if (gb >= 1000) return `${(gb / 1000).toFixed(1)} TB`;
+  if (gb >= 1) return `${gb.toFixed(1)} GB`;
+  return `${Math.round(bytes / 1e6)} MB`;
 }
 
 export function formatCapacity(gb: number | null): string {

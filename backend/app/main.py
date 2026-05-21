@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -22,9 +23,21 @@ logging.basicConfig(
 )
 
 
+def _apply_migrations() -> None:
+    """Add new columns to existing tables without Alembic."""
+    with engine.connect() as conn:
+        for col, typedef in [("used_bytes", "INTEGER"), ("free_bytes", "INTEGER")]:
+            try:
+                conn.execute(text(f"ALTER TABLE disks ADD COLUMN {col} {typedef}"))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _apply_migrations()
     db = SessionLocal()
     try:
         seed_default_rules(db)

@@ -19,6 +19,8 @@ class Disk(Base):
     capacity_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
     first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    used_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    free_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class SmartSnapshot(Base):

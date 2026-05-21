@@ -8,7 +8,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app import models
 from app.alerts import AlertEvaluator
-from app.smart import SmartCollector
+from app.smart import SmartCollector, get_disk_usage
 from app.utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,9 @@ def run_scan() -> list[str]:
                 disk.interface = result.interface
                 disk.capacity_gb = result.capacity_gb
                 disk.last_seen = utcnow()
+                usage = get_disk_usage(device)
+                if usage is not None:
+                    disk.used_bytes, disk.free_bytes = usage
                 db.flush()
 
                 snapshot = models.SmartSnapshot(

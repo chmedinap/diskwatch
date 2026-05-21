@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { DiskDetail as DiskDetailData, SelfTestLog, TemperaturePoint } from "../api";
 import {
   tempColor,
+  formatBytes,
   formatCapacity,
   formatHours,
   attrRaw,
@@ -124,6 +125,8 @@ export default function DiskDetail({ disk, tempHistory, onBack }: Props) {
             <InfoField label="Firmware" value={disk.firmware} />
             <InfoField label="Interface" value={disk.interface?.toUpperCase()} />
             <InfoField label="Capacity" value={formatCapacity(disk.capacity_gb)} />
+            <InfoField label="Used" value={formatBytes(disk.used_bytes)} />
+            <InfoField label="Free" value={formatBytes(disk.free_bytes)} valueColor={diskFreeColor(disk.used_bytes, disk.free_bytes)} />
             <InfoField label="First seen" value={fmtDateLong(disk.first_seen)} />
             <InfoField label="Last scan" value={fmtDateLong(disk.last_seen)} />
             {/* Health score inline */}
@@ -254,11 +257,19 @@ function HealthBadge({ health }: { health: string | null }) {
   );
 }
 
-function InfoField({ label, value }: { label: string; value?: string | null }) {
+function diskFreeColor(used: number | null, free: number | null): string {
+  if (used == null || free == null || used + free === 0) return "#e2e8f0";
+  const pct = used / (used + free);
+  if (pct >= 0.9) return "#f87171";
+  if (pct >= 0.75) return "#fcd34d";
+  return "#4ade80";
+}
+
+function InfoField({ label, value, valueColor }: { label: string; value?: string | null; valueColor?: string }) {
   return (
     <div>
       <div style={{ color: "#475569", fontSize: "0.68rem", letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ color: "#e2e8f0", fontWeight: 500, marginTop: 1 }}>{value ?? "—"}</div>
+      <div style={{ color: valueColor ?? "#e2e8f0", fontWeight: 500, marginTop: 1 }}>{value ?? "—"}</div>
     </div>
   );
 }
