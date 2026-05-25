@@ -48,15 +48,24 @@ class CollectionResult:
     attributes: list[AttributeRow] = field(default_factory=list)
 
 
-def get_disk_usage(device: str) -> tuple[int, int] | None:
-    """Return (used_bytes, free_bytes) for all mounted partitions of *device*.
+_HOST_PROC_MOUNTS = "/host/proc/mounts"
+_HOST_ROOT = "/host"
 
-    Reads /proc/mounts and calls os.statvfs on each mount point.
+
+def get_disk_usage(device: str) -> tuple[int, int, str | None] | None:
+    """Return (used_bytes, free_bytes, primary_mount) for all mounted partitions of *device*.
+
+    Reads /host/proc/mounts (host filesystem exposed via Docker volume) when
+    available, falling back to /proc/mounts for non-Docker environments.
     Returns None when no partitions are mounted (unformatted drive, etc.).
     """
+    use_host = os.path.exists(_HOST_PROC_MOUNTS)
+    mounts_file = _HOST_PROC_MOUNTS if use_host else "/proc/mounts"
+    host_prefix = _HOST_ROOT if use_host else ""
+
     mount_points: list[str] = []
     try:
-        with open("/proc/mounts") as fh:
+        with open(mounts_file) as fh:
             for line in fh:
                 parts = line.split()
                 if len(parts) < 2:
@@ -73,18 +82,19 @@ def get_disk_usage(device: str) -> tuple[int, int] | None:
     if not mount_points:
         return None
 
+    primary_mount = mount_points[0]
     used_total = free_total = 0
     counted = False
     for mp in mount_points:
         try:
-            st = os.statvfs(mp)
+            st = os.statvfs(host_prefix + mp)
             used_total += (st.f_blocks - st.f_bfree) * st.f_frsize
             free_total += st.f_bavail * st.f_frsize
             counted = True
         except Exception:
             continue
 
-    return (used_total, free_total) if counted else None
+    return (used_total, free_total, primary_mount) if counted else None
 
 
 class SmartCollector:

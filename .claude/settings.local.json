@@ -14,7 +14,8 @@
       "PowerShell(docker compose build 2>&1)",
       "PowerShell(tail -20)",
       "PowerShell(docker compose build)",
-      "PowerShell(docker push martitoci/diskwatch-backend:latest)"
+      "PowerShell(docker push martitoci/diskwatch-backend:latest)",
+      "PowerShell(docker build -t martitoci/diskwatch-frontend:latest ./frontend 2>&1)"
     ]
   }
 }

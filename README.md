@@ -11,12 +11,14 @@ Self-hosted disk health monitoring using SMART data. Reads drive health via `sma
 - **Temperature gauge** — live SVG gauge + 30-day history chart per disk
 - **Health score** — 0–100 score per disk based on critical attributes, temperature, and power-on hours
 - **Attribute history** — multi-line overlay chart (7 / 30 / 90 days) for any combination of SMART attributes
+- **Disk usage** — used / free space per disk read from the host filesystem, with color-coded bar
+- **Mount path** — shows the filesystem mount point of each disk directly on the card
 - **Alert system** — configurable rules (threshold / change / health-failed) with optional webhook notifications
 - **Self-test trigger** — run short or long SMART self-tests from the UI
 - **Scheduled scans** — automatic scan every 30 minutes, manual trigger available
 
 > **Linux host required for real disk access.**  
-> The backend runs with `privileged: true` and mounts `/dev:/dev` so `smartctl` can read physical drives. On Windows/macOS Docker Desktop the stack starts fine but SMART data will not be available.
+> The backend runs with `privileged: true` and mounts `/dev:/dev` so `smartctl` can read physical drives. Disk usage and mount paths also require the additional host volume mounts described below. On Windows/macOS Docker Desktop the stack starts fine but SMART data will not be available.
 
 ---
 
@@ -41,6 +43,13 @@ services:
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     volumes:
       - /dev:/dev
+      - /proc/mounts:/host/proc/mounts:ro
+      - type: bind
+        source: /
+        target: /host
+        read_only: true
+        bind:
+          propagation: rslave
       - diskwatch_data:/data
     networks:
       - internal
@@ -63,6 +72,11 @@ networks:
   internal:
     driver: bridge
 ```
+
+> **Volume mounts explained:**
+> - `/dev:/dev` — gives `smartctl` direct access to block devices
+> - `/proc/mounts:/host/proc/mounts:ro` — exposes the host's mount table so the backend can find which partitions are mounted
+> - `/ → /host (rslave, ro)` — exposes the host filesystem so used/free space can be read via `statvfs`; `rslave` propagates sub-mounts (e.g. `/home` on a separate partition)
 
 **2. (Optional) Create a `.env` file to override defaults:**
 
@@ -107,6 +121,13 @@ services:
       ALERT_WEBHOOK_URL: ""
     volumes:
       - /dev:/dev
+      - /proc/mounts:/host/proc/mounts:ro
+      - type: bind
+        source: /
+        target: /host
+        read_only: true
+        bind:
+          propagation: rslave
       - diskwatch_data:/data
     networks:
       - internal

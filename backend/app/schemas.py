@@ -40,6 +40,7 @@ class DiskListItem(BaseModel):
     last_snapshot_at: datetime | None
     used_bytes: int | None = None
     free_bytes: int | None = None
+    mount_point: str | None = None
 
 
 class DiskDetail(BaseModel):
@@ -56,6 +57,7 @@ class DiskDetail(BaseModel):
     attributes: list[SmartAttributeRead]
     used_bytes: int | None = None
     free_bytes: int | None = None
+    mount_point: str | None = None
 
 
 class AttributeHistoryPoint(BaseModel):

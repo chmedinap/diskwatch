@@ -44,7 +44,7 @@ def run_scan() -> list[str]:
                 disk.last_seen = utcnow()
                 usage = get_disk_usage(device)
                 if usage is not None:
-                    disk.used_bytes, disk.free_bytes = usage
+                    disk.used_bytes, disk.free_bytes, disk.mount_point = usage
                 db.flush()
 
                 snapshot = models.SmartSnapshot(

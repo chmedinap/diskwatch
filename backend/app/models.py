@@ -21,6 +21,7 @@ class Disk(Base):
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     used_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     free_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mount_point: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
 
 class SmartSnapshot(Base):

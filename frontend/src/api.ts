@@ -14,6 +14,7 @@ export interface DiskListItem {
   last_snapshot_at: string | null;
   used_bytes: number | null;
   free_bytes: number | null;
+  mount_point: string | null;
 }
 
 export interface SmartAttribute {
@@ -49,6 +50,7 @@ export interface DiskDetail {
   attributes: SmartAttribute[];
   used_bytes: number | null;
   free_bytes: number | null;
+  mount_point: string | null;
 }
 
 export interface TemperaturePoint {

@@ -26,7 +26,7 @@ logging.basicConfig(
 def _apply_migrations() -> None:
     """Add new columns to existing tables without Alembic."""
     with engine.connect() as conn:
-        for col, typedef in [("used_bytes", "INTEGER"), ("free_bytes", "INTEGER")]:
+        for col, typedef in [("used_bytes", "INTEGER"), ("free_bytes", "INTEGER"), ("mount_point", "VARCHAR(256)")]:
             try:
                 conn.execute(text(f"ALTER TABLE disks ADD COLUMN {col} {typedef}"))
                 conn.commit()

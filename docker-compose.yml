@@ -15,6 +15,13 @@ services:
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     volumes:
       - /dev:/dev
+      - /proc/mounts:/host/proc/mounts:ro
+      - type: bind
+        source: /
+        target: /host
+        read_only: true
+        bind:
+          propagation: rslave
       - diskwatch_data:/data
     networks:
       - internal

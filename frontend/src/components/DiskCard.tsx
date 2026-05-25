@@ -152,6 +152,9 @@ export default function DiskCard({ disk, detail, sparkData, onClick, onDelete }:
         <Stat label="Power-on" value={formatHours(poh)} />
         <UsageStat used={disk.used_bytes} free={disk.free_bytes} />
         <Stat label="Last scan" value={lastScan} />
+        {disk.mount_point && (
+          <MountStat path={disk.mount_point} />
+        )}
       </div>
 
       {/* Sparkline */}
@@ -206,6 +209,27 @@ function UsageStat({ used, free }: { used: number | null; free: number | null })
         <span style={{ color: "#e2e8f0" }}>{formatBytes(used)}</span>
         <span style={{ color: "#334155" }}> / </span>
         <span style={{ color: fc }}>{formatBytes(free)}</span>
+      </div>
+    </div>
+  );
+}
+
+function MountStat({ path }: { path: string }) {
+  return (
+    <div style={{ gridColumn: "span 3", marginTop: "0.1rem" }}>
+      <div style={{ color: "#475569", fontSize: "0.68rem" }}>Mount</div>
+      <div
+        style={{
+          fontWeight: 600,
+          color: "#94a3b8",
+          fontFamily: "monospace",
+          fontSize: "0.75rem",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {path}
       </div>
     </div>
   );
